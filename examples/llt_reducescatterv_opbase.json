@@ -1,0 +1,25 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "reducescatterv_opbase_demo",
+      "operation": {
+        "type": "REDUCE_SCATTER_V",
+        "op_mode": "OPBASE",
+        "data_type": "FP32",
+        "algorithm": "ReduceScatterVMeshOpbaseExecutor",
+        "reduce_op": "SUM",
+        "counts": [100, 200, 300, 400],
+        "displs": [0, 100, 300, 600]
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 1,
+        "ranks_per_server": 4
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}

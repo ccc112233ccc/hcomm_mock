@@ -1,0 +1,27 @@
+{
+  "test_cases": [
+    {
+      "name": "allreduce_aiv_rdma_910b",
+      "operation": {
+        "type": "ALLREDUCE",
+        "algorithm": "AllReduceSmallCountAivRdmaExecutor",
+        "reduce_op": "SUM",
+        "data_type": "INT8",
+        "data_size": 100,
+        "op_mode": "OPBASE"
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 1,
+        "ranks_per_server": 16
+      },
+      "device": "DEV_TYPE_910B",
+      "env_vars": {
+        "HCCL_OP_EXPANSION_MODE": "AIV"
+      }
+    }
+  ],
+  "output": {
+    "directory": "./llt_output/allreduce_aiv_rdma_910b_bundle"
+  }
+}

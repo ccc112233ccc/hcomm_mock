@@ -1,0 +1,22 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "alltoall_opbase_demo",
+      "operation": {
+        "type": "ALLTOALL",
+        "op_mode": "OPBASE",
+        "data_type": "INT32",
+        "count": 300
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 1,
+        "ranks_per_server": 3
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}

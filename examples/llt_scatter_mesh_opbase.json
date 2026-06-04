@@ -1,0 +1,24 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "scatter_mesh_opbase_demo",
+      "operation": {
+        "type": "SCATTER",
+        "op_mode": "OPBASE",
+        "data_type": "INT32",
+        "data_size": 400,
+        "algorithm": "ScatterMeshExecutor",
+        "root": 0
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 2,
+        "ranks_per_server": 8
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}

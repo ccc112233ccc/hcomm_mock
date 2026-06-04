@@ -1,0 +1,27 @@
+{
+  "output": {
+    "directory": "./llt_output/allreduce_test_offload_a3_bundle"
+  },
+  "test_cases": [
+    {
+      "name": "allreduce_test_offload_a3",
+      "operation": {
+        "type": "ALLREDUCE",
+        "algorithm": "",
+        "reduce_op": "SUM",
+        "data_type": "FP32",
+        "data_size": 25165824,
+        "op_mode": "OFFLOAD"
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 2,
+        "ranks_per_server": 16
+      },
+      "device": "DEV_TYPE_910_93",
+      "env_vars": {
+        "HCCL_ALGO": "level0:NA;level1:NA"
+      }
+    }
+  ]
+}

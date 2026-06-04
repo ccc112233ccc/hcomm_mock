@@ -1,0 +1,24 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "send_recv_two_servers_opbase_demo",
+      "operation": {
+        "type": "SEND",
+        "op_mode": "OPBASE",
+        "data_type": "INT32",
+        "data_size": 400,
+        "src_rank": 0,
+        "dst_rank": 1
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 2,
+        "ranks_per_server": 1
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}

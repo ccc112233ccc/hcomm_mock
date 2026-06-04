@@ -1,0 +1,22 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "batch_send_recv_opbase_demo",
+      "operation": {
+        "type": "BATCH_SEND_RECV",
+        "op_mode": "OPBASE",
+        "data_type": "INT8",
+        "count": 1024
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 1,
+        "ranks_per_server": 8
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "alltoallv_opbase_demo",
+      "operation": {
+        "type": "ALLTOALLV",
+        "op_mode": "OPBASE",
+        "data_type": "FP16",
+        "algorithm": "RunAlltoAllVFullMesh",
+        "send_counts": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+        "recv_counts": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+        "sdispls": [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500],
+        "rdispls": [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500]
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 2,
+        "ranks_per_server": 8
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}

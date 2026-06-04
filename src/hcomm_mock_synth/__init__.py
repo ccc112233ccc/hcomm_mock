@@ -1,0 +1,2 @@
+"""HCOMM mock synthesis package."""
+

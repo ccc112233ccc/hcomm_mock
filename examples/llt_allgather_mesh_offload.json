@@ -1,0 +1,26 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "allgather_mesh_offload_demo",
+      "operation": {
+        "type": "ALLGATHER",
+        "op_mode": "OFFLOAD",
+        "data_type": "FP32",
+        "data_size": 800,
+        "algorithm": "AllGatherMeshExecutor"
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 2,
+        "ranks_per_server": 8
+      },
+      "device": "DEV_TYPE_910B",
+      "env_vars": {
+        "HCCL_ALGO": "level0:NA;level1:NB"
+      }
+    }
+  ]
+}

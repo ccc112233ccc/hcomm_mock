@@ -1,0 +1,4 @@
+base_commit=9029b29b2aa457c4a84799afd67891cde362579a
+target_commit=c9e348143
+source_branch=hcomm_mock
+base_ref=master

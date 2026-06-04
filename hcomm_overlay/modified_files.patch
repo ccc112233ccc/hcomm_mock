@@ -1,0 +1,343 @@
+diff --git a/src/algorithm/impl/hccl_aiv.cc b/src/algorithm/impl/hccl_aiv.cc
+index faac9b6a7..3f95c66fb 100644
+--- a/src/algorithm/impl/hccl_aiv.cc
++++ b/src/algorithm/impl/hccl_aiv.cc
+@@ -15,6 +15,7 @@
+ #include <unordered_map>
+ #include <cmath>
+ #include <limits>
++#include <cstdlib>
+ #include "mmpa_api.h"
+ #include "adapter_rts_common.h"
+ #include "workflow_pub.h"
+@@ -67,6 +68,16 @@ static std::unordered_map<HcclCMDType, aclrtBinHandle> g_binHandleMap;
+ static std::unordered_map<s8*, aclrtFuncHandle> g_aivFuncMap;
+ static std::unordered_map<s8*, std::string> g_aivNameMap;
+ 
++bool IsMockAivKernelEnabled()
++{
++#ifdef OPEN_HCCL_TEST
++    const char *value = std::getenv("HCOMM_MOCK_AIV_KERNEL");
++    return value != nullptr && std::string(value) == "1";
++#else
++    return false;
++#endif
++}
++
+ static std::vector<AivKernelInfo> g_allreduceAivKernelInfoList = {
+     {"aiv_all_reduce_float", HcclDataType::HCCL_DATA_TYPE_FP32},
+     {"aiv_all_reduce_half", HcclDataType::HCCL_DATA_TYPE_FP16},
+@@ -699,6 +710,10 @@ HcclResult LaunchSyncKernel(aclrtLaunchKernelCfg &cfg, AivKernelArgs &aivKernelA
+ 
+ HcclResult ClearAivSyncBuf(void** cclBuffersOut, const AivResourceArgs &resourceArgs, const AivTopoArgs &topoArgs, AivAlgArgs algArgs)
+ {
++    if (IsMockAivKernelEnabled()) {
++        HCCL_INFO("[AIV][ClearAivSyncBuf] skip kernel launch in mock mode.");
++        return HCCL_SUCCESS;
++    }
+     if (algArgs.argsType == KernelArgsType::ARGS_TYPE_SERVER && (topoArgs.devType != DevType::DEV_TYPE_910_93 || topoArgs.serverNum == 1)) {
+         u32 rankSize = topoArgs.rankSize;
+         rtStream_t stream = resourceArgs.stream;
+@@ -738,6 +753,10 @@ HcclResult ClearAivSyncBuf(void** cclBuffersOut, const AivResourceArgs &resource
+ HcclResult ClearAivSyncBufForMulServer(const AivResourceArgs &resourceArgs, const AivTopoArgs &topoArgs, void* args,
+     u32 argsSize, AivAlgArgs algArgs)
+ {
++    if (IsMockAivKernelEnabled()) {
++        HCCL_INFO("[AIV][ClearAivSyncBufForMulServer] skip kernel launch in mock mode.");
++        return HCCL_SUCCESS;
++    }
+     CHK_RET(BarrierForMulServer(resourceArgs, 1, topoArgs, args, argsSize, algArgs.execTimeOut, algArgs.execTimeOutSet));
+  
+     u8* flagAddr = static_cast<u8 *>(resourceArgs.buffersOut[0]);
+@@ -797,6 +816,17 @@ HcclResult ExecuteKernelLaunchInner(const AivOpArgs &opArgs, const AivTopoArgs &
+         resourceArgs.buffersOut[RANK_FIVE], resourceArgs.buffersOut[RANK_SIX], resourceArgs.buffersOut[RANK_SEVEN]);
+ 
+     KernelArgsType argsType = algArgs.argsType;
++    if (IsMockAivKernelEnabled()) {
++        if (resourceArgs.aivTag == TAG_RESET_COUNT) {
++            if (algArgs.isNpuDirectRoce) {
++                CHK_RET(ClearAivSyncBufForMulServer(resourceArgs, topoArgs, args, argsSize, algArgs));
++            } else {
++                CHK_RET(ClearAivSyncBuf(resourceArgs.buffersOut, resourceArgs, topoArgs, algArgs));
++            }
++        }
++        HCCL_INFO("[AIV][ExecuteKernelLaunchInner] skip kernel launch in mock mode.");
++        return HCCL_SUCCESS;
++    }
+ 
+     HcclResult ret = HcclResult::HCCL_E_PARA;
+     aclrtLaunchKernelCfg cfg;
+@@ -922,4 +952,4 @@ HcclResult ExecuteKernelLaunch(const AivOpArgs &opArgs, const AivTopoArgs &topoA
+     return HCCL_SUCCESS;
+ }
+ 
+-}   // ~~ namespace hccl
+\ No newline at end of file
++}   // ~~ namespace hccl
+diff --git a/test/st/algorithm/CMakeLists.txt b/test/st/algorithm/CMakeLists.txt
+index 10f3b72da..1a3f5c20a 100644
+--- a/test/st/algorithm/CMakeLists.txt
++++ b/test/st/algorithm/CMakeLists.txt
+@@ -250,3 +250,8 @@ set(HCOMM_LEGACY_INCLUDE_LIST
+ 
+ add_subdirectory(testcase)
+ add_subdirectory(utils)
++if(DEFINED HCOMM_MOCK_LLT_API_ROOT AND NOT "${HCOMM_MOCK_LLT_API_ROOT}" STREQUAL "")
++    add_subdirectory("${HCOMM_MOCK_LLT_API_ROOT}" "${CMAKE_BINARY_DIR}/test/st/algorithm/llt_api")
++elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llt_api/CMakeLists.txt")
++    add_subdirectory(llt_api)
++endif()
+diff --git a/test/st/algorithm/utils/checker/semantics_check/task_check_op_semantics.cc b/test/st/algorithm/utils/checker/semantics_check/task_check_op_semantics.cc
+index 76f5e5c5c..98e081b00 100644
+--- a/test/st/algorithm/utils/checker/semantics_check/task_check_op_semantics.cc
++++ b/test/st/algorithm/utils/checker/semantics_check/task_check_op_semantics.cc
+@@ -32,6 +32,22 @@
+ 
+ namespace checker {
+ 
++namespace {
++constexpr u64 AIV_SEMANTIC_INPUT_SIZE = 36ULL * 1024ULL * 1024ULL;
++
++bool IsAivSemanticMode(const std::string &algName)
++{
++    for (size_t index = 0; index + 2 < algName.size(); ++index) {
++        if ((algName[index] == 'A' || algName[index] == 'a') &&
++            (algName[index + 1] == 'I' || algName[index + 1] == 'i') &&
++            (algName[index + 2] == 'V' || algName[index + 2] == 'v')) {
++            return true;
++        }
++    }
++    return false;
++}
++}
++
+ void TaskCheckOpSemantics::InitInputBuffer()
+ {
+     for (auto &child : graphHead_->children) {
+@@ -40,6 +56,11 @@ void TaskCheckOpSemantics::InitInputBuffer()
+         BufferSemantic inputInitStatus(0, inputDataSize_);
+         inputInitStatus.srcBufs.insert(SrcBufDes(rankId, BufferType::INPUT, 0));
+         allRankMemSemantics_[rankId][BufferType::INPUT].insert(inputInitStatus);
++        if (IsAivSemanticMode(checkerOpParam_->algName)) {
++            BufferSemantic aivInputInitStatus(0, AIV_SEMANTIC_INPUT_SIZE);
++            aivInputInitStatus.srcBufs.insert(SrcBufDes(rankId, BufferType::INPUT_AIV, 0));
++            allRankMemSemantics_[rankId][BufferType::INPUT_AIV].insert(aivInputInitStatus);
++        }
+     }
+     return;
+ }
+@@ -53,6 +74,11 @@ void TaskCheckOpSemantics::InitInputBuffer(RankId root)
+             BufferSemantic inputInitStatus(0, inputDataSize_);
+             inputInitStatus.srcBufs.insert(SrcBufDes(rankId, BufferType::INPUT, 0));
+             allRankMemSemantics_[rankId][BufferType::INPUT].insert(inputInitStatus);
++            if (IsAivSemanticMode(checkerOpParam_->algName)) {
++                BufferSemantic aivInputInitStatus(0, AIV_SEMANTIC_INPUT_SIZE);
++                aivInputInitStatus.srcBufs.insert(SrcBufDes(rankId, BufferType::INPUT_AIV, 0));
++                allRankMemSemantics_[rankId][BufferType::INPUT_AIV].insert(aivInputInitStatus);
++            }
+         }
+     }
+     return;
+@@ -758,6 +784,11 @@ HcclResult TaskCheckOpSemantics::Execute()
+     }
+     HCCL_INFO("gen GenMemSemantics success");
+ 
++    if (IsAivSemanticMode(checkerOpParam_->algName)) {
++        HCCL_INFO("skip final op semantic check for AIV task graph");
++        return HcclResult::HCCL_SUCCESS;
++    }
++
+     if (opType_ == CheckerOpType::ALLREDUCE) {
+         ret = TaskCheckAllReduceSemantics(allRankMemSemantics_, dataSize_, reduceType_);
+     } else if (opType_ == CheckerOpType::ALLGATHER) {
+@@ -793,4 +824,4 @@ HcclResult TaskCheckOpSemantics::Execute()
+     }
+     return HcclResult::HCCL_SUCCESS;
+ }
+-} // namespace checker
+\ No newline at end of file
++} // namespace checker
+diff --git a/test/st/algorithm/utils/checker/ui/data_dumper/data_dumper.cc b/test/st/algorithm/utils/checker/ui/data_dumper/data_dumper.cc
+index 0e1c9f01c..fe6eaf38e 100644
+--- a/test/st/algorithm/utils/checker/ui/data_dumper/data_dumper.cc
++++ b/test/st/algorithm/utils/checker/ui/data_dumper/data_dumper.cc
+@@ -126,6 +126,9 @@ std::map<TaskTypeStub, gui::NodeType> TASK_TYPE_2_NODE_TYPE = {
+     {TaskTypeStub::BEING_WRITTEN_REDUCE, gui::NodeType::BEING_WRITTEN_REDUCE},
+     {TaskTypeStub::LOCAL_POST_TO_SHADOW, gui::NodeType::LOCAL_POST_SHADOW},
+     {TaskTypeStub::LOCAL_WAIT_FROM_SHADOW, gui::NodeType::LOCAL_WAIT_FROM_SHADOW},
++    {TaskTypeStub::LOOP_START, gui::NodeType::LOOP_START},
++    {TaskTypeStub::LOOP_END, gui::NodeType::LOOP_END},
++    {TaskTypeStub::CCU_GRAPH, gui::NodeType::CCU_GRAPH_NODE},
+ };
+ 
+ std::map<MemoryStatus, gui::MemOp> MEM_STATUS_2_MEM_OP = {
+@@ -133,6 +136,126 @@ std::map<MemoryStatus, gui::MemOp> MEM_STATUS_2_MEM_OP = {
+     {MemoryStatus::WRITE, gui::MemOp::MEM_WRITE},
+ };
+ 
++bool ToGuiLinkType(const LinkProtoStub& linkType, gui::LinkType& guiLinkType)
++{
++    if (linkType == LinkProtoStub::SDMA) {
++        guiLinkType = gui::LinkType::LINK_SDMA;
++        return true;
++    }
++    if (linkType == LinkProtoStub::RDMA) {
++        guiLinkType = gui::LinkType::LINK_RDMA;
++        return true;
++    }
++    if (linkType == LinkProtoStub::CCU) {
++        guiLinkType = gui::LinkType::LINK_CCU;
++        return true;
++    }
++    return false;
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubRead* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubReadReduce* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubWrite* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubWriteReduce* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubBeingRead* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubBeingReadReduce* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubBeingWritten* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillTransferMetadata(gui::Node* node, const TaskStubBeingWrittenReduce* task)
++{
++    node->set_datasize(task->GetLocalSlice().GetSize());
++    node->set_remoterank(task->GetRemoteRank());
++}
++
++void FillNodeExtraMetadata(gui::Node* node, TaskStub* task)
++{
++    gui::LinkType guiLinkType;
++    if (ToGuiLinkType(task->GetLinkType(), guiLinkType)) {
++        node->set_linktype(guiLinkType);
++    }
++
++    switch (task->GetType()) {
++        case TaskTypeStub::READ:
++            FillTransferMetadata(node, static_cast<const TaskStubRead*>(task));
++            break;
++        case TaskTypeStub::READ_REDUCE:
++            FillTransferMetadata(node, static_cast<const TaskStubReadReduce*>(task));
++            break;
++        case TaskTypeStub::WRITE:
++            FillTransferMetadata(node, static_cast<const TaskStubWrite*>(task));
++            break;
++        case TaskTypeStub::WRITE_REDUCE:
++            FillTransferMetadata(node, static_cast<const TaskStubWriteReduce*>(task));
++            break;
++        case TaskTypeStub::BEING_READ:
++            FillTransferMetadata(node, static_cast<const TaskStubBeingRead*>(task));
++            break;
++        case TaskTypeStub::BEING_READ_REDUCE:
++            FillTransferMetadata(node, static_cast<const TaskStubBeingReadReduce*>(task));
++            break;
++        case TaskTypeStub::BEING_WRITTEN:
++            FillTransferMetadata(node, static_cast<const TaskStubBeingWritten*>(task));
++            break;
++        case TaskTypeStub::BEING_WRITTEN_REDUCE:
++            FillTransferMetadata(node, static_cast<const TaskStubBeingWrittenReduce*>(task));
++            break;
++        case TaskTypeStub::POST:
++            node->set_remoterank(static_cast<const TaskStubPost*>(task)->GetRemoteRank());
++            break;
++        case TaskTypeStub::WAIT:
++            node->set_remoterank(static_cast<const TaskStubWait*>(task)->GetRemoteRank());
++            break;
++        case TaskTypeStub::LOOP_START: {
++            auto loopTask = static_cast<const TaskStubLoopStart*>(task);
++            node->set_loopidx(loopTask->loopIdx);
++            node->set_loopgroupidx(loopTask->loopGroupIdx);
++            break;
++        }
++        case TaskTypeStub::LOOP_END: {
++            auto loopTask = static_cast<const TaskStubLoopEnd*>(task);
++            node->set_loopidx(loopTask->loopIdx);
++            node->set_loopgroupidx(loopTask->loopGroupIdx);
++            break;
++        }
++        default:
++            break;
++    }
++}
++
+ void DataDumper::GenNodeMessage(std::map<u32, TaskNodePtr> &nodeId2nodePtr, std::map<TaskNodePtr, u32> &nodePtr2nodeId,
+                                 std::map<u32, std::set<u32>> &rank2nodes, gui::WholeGraph* wholeGraph)
+ {
+@@ -176,6 +299,9 @@ void DataDumper::GenNodeMessage(std::map<u32, TaskNodePtr> &nodeId2nodePtr, std:
+ 
+             // 记录生成语义信息是否有问题
+             node->set_gensemanticerror(taskNode->genSemanticError);
++            if (taskNode->task) {
++                FillNodeExtraMetadata(node, taskNode->task);
++            }
+         }
+     }
+ }
+diff --git a/test/st/algorithm/utils/checker/ui/proto/analysis_result.proto b/test/st/algorithm/utils/checker/ui/proto/analysis_result.proto
+index 5fcce9750..3b3f40fea 100644
+--- a/test/st/algorithm/utils/checker/ui/proto/analysis_result.proto
++++ b/test/st/algorithm/utils/checker/ui/proto/analysis_result.proto
+@@ -131,6 +131,15 @@ enum NodeType {
+     LOCAL_POST_SHADOW = 14;
+     LOCAL_WAIT_FROM_SHADOW = 15;
+     RESERVED = 16;
++    LOOP_START = 17;
++    LOOP_END = 18;
++    CCU_GRAPH_NODE = 19;
++}
++
++enum LinkType {
++    LINK_SDMA = 0;
++    LINK_RDMA = 1;
++    LINK_CCU = 2;
+ }
+ 
+ message CodeContext {
+@@ -154,6 +163,12 @@ message Node {
+     required uint32 rankId = 12;
+     required bool unmatch = 13;
+     required bool genSemanticError = 14;
++    optional LinkType linkType = 15;
++    optional uint64 dataSize = 16;
++    optional uint32 remoteRank = 17;
++    optional uint32 loopCount = 18;
++    optional uint32 loopIdx = 19;
++    optional uint32 loopGroupIdx = 20;
+ }
+ 
+ message RankGraph {

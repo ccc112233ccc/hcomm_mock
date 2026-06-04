@@ -1,0 +1,26 @@
+{
+  "test_cases": [
+    {
+      "name": "broadcast_aiv_910b",
+      "operation": {
+        "type": "BROADCAST",
+        "algorithm": "BroadcastMeshAivExecutor",
+        "data_type": "FP16",
+        "data_size": 2,
+        "op_mode": "OPBASE"
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 1,
+        "ranks_per_server": 8
+      },
+      "device": "DEV_TYPE_910B",
+      "env_vars": {
+        "HCCL_OP_EXPANSION_MODE": "AIV"
+      }
+    }
+  ],
+  "output": {
+    "directory": "./llt_output/broadcast_aiv_910b_bundle"
+  }
+}

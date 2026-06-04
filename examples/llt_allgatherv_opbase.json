@@ -1,0 +1,24 @@
+{
+  "output": {
+    "directory": "./llt_output"
+  },
+  "test_cases": [
+    {
+      "name": "allgatherv_opbase_demo",
+      "operation": {
+        "type": "ALLGATHER_V",
+        "op_mode": "OPBASE",
+        "data_type": "INT32",
+        "algorithm": "AllGatherVMeshExecutor",
+        "counts": [1000, 2000, 3000, 4000],
+        "displs": [0, 1000, 3000, 6000]
+      },
+      "topology": {
+        "super_pods": 1,
+        "servers": 1,
+        "ranks_per_server": 4
+      },
+      "device": "DEV_TYPE_910B"
+    }
+  ]
+}
