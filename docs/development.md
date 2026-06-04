@@ -13,7 +13,7 @@
 - ns3-ub traffic 导出。
 - AIV mock 分析路径。
 
-`llt_api/` 保留为 C++/pybind 模块源码，编译时由 `run_case.py build` 接入 hcomm 的 CMake 构建。
+`src/llt_api/` 保留为 C++/pybind 模块源码，编译时由 `run_case.py build` 接入 hcomm 的 CMake 构建。
 
 ## 基线
 
@@ -23,9 +23,9 @@
 
 ## 关键目录
 
-- `hcomm_overlay/modified_files.patch`：对 hcomm 已有文件的 patch。
-- `llt_api/`：C++/pybind 模块源码，只保留构建必要文件。
-- `src/hcomm_mock_synth/`：Python 正式工具链。
+- `patches/modified_files.patch`：对 hcomm 已有文件的 patch。
+- `src/llt_api/`：C++/pybind 模块源码，只保留构建必要文件。
+- `src/hcomm_mock/`：Python 正式工具链。
 - `examples/`：输入 case。
 - `run_case.py prepare`：拉取或修改 hcomm 仓库并应用 patch。
 - `run_case.py build`：在 hcomm 构建目录中编译 `_llt_api` 和 smoke test。
@@ -47,7 +47,7 @@
 
 ## Overlay 同步流程
 
-本仓库是独立工具仓库，不是旧式迁移包。它仍然需要维护一份 `hcomm_overlay/modified_files.patch`，用于在自动拉取的官方 hcomm 上应用 proto、data dumper、AIV mock、CMake 等必要改动。
+本仓库是独立工具仓库，不是旧式迁移包。它仍然需要维护一份 `patches/modified_files.patch`，用于在自动拉取的官方 hcomm 上应用 proto、data dumper、AIV mock、CMake 等必要改动。
 
 `sync` 只用于开发维护：当你在某个 hcomm 工作树中继续修改了这些 overlay 相关代码后，可以把差异重新同步回本仓库：
 
@@ -60,14 +60,14 @@ python3 run_case.py sync \
 
 同步内容包括：
 
-- `llt_api/CMakeLists.txt`
-- `llt_api/include/`
-- `llt_api/src/`
+- `src/llt_api/CMakeLists.txt`
+- `src/llt_api/include/`
+- `src/llt_api/src/`
 - `examples/llt_*.json`
-- `hcomm_overlay/modified_files.patch`
+- `patches/modified_files.patch`
 - `metadata.txt`
 
-`llt_api` 下旧 Python 工具不会再同步。运行、导出和可视化统一由 `src/hcomm_mock_synth/` 和根目录 `run_case.py` 负责。
+`src/llt_api` 下旧 Python 工具不会再同步。运行、导出和可视化统一由 `src/hcomm_mock/` 和根目录 `run_case.py` 负责。
 
 ## JSON 输入
 

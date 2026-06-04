@@ -14,8 +14,9 @@
 ## 目录结构
 
 - `examples/`：示例 case。
-- `llt_api/`：接入 hcomm ST 的 C++/pybind 模块源码。
-- `src/hcomm_mock_synth/`：Python 包，负责运行 case、解析 DAG、导出 trace/traffic。
+- `src/llt_api/`：接入 hcomm ST 的 C++/pybind 模块源码。
+- `src/hcomm_mock/`：Python 包，负责运行 case、解析 DAG、导出 trace/traffic。
+- `patches/`：应用到官方 hcomm 的 overlay patch。
 - `run_case.py`：推荐运行入口。
 - `docs/`：开发和 overlay 维护说明。
 

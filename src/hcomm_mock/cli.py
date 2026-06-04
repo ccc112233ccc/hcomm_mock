@@ -125,6 +125,8 @@ def init_config(args: argparse.Namespace) -> int:
 def build_hcomm(args: argparse.Namespace) -> int:
     hcomm = resolve_hcomm_or_prepare(args)
     build_dir = resolve_build_dir(args)
+    ensure_compatible_cmake_cache(hcomm, build_dir)
+    remove_stale_third_party_cmake_caches(hcomm)
     env = build_env()
     cmd = [
         "cmake",
@@ -135,7 +137,7 @@ def build_hcomm(args: argparse.Namespace) -> int:
         "-DENABLE_TEST=ON",
         "-DENABLE_ST=ON",
         f"-DASCEND_CANN_PACKAGE_PATH={env['ASCEND_HOME_PATH']}",
-        f"-DHCOMM_MOCK_LLT_API_ROOT={REPO_ROOT / 'llt_api'}",
+        f"-DHCOMM_MOCK_LLT_API_ROOT={REPO_ROOT / 'src' / 'llt_api'}",
     ]
     subprocess.run(cmd, check=True, env=env)
     subprocess.run(
@@ -168,7 +170,7 @@ def prepare_hcomm(args: argparse.Namespace) -> int:
         raise RuntimeError(f"branch already exists: {branch}")
 
     run_git(hcomm, "checkout", "-b", branch, args.base)
-    patch = REPO_ROOT / "hcomm_overlay" / "modified_files.patch"
+    patch = REPO_ROOT / "patches" / "modified_files.patch"
     subprocess.run(["git", "-C", str(hcomm), "apply", "--check", str(patch)], check=True)
     subprocess.run(["git", "-C", str(hcomm), "apply", str(patch)], check=True)
     run_git(hcomm, "add", "-A")
@@ -209,7 +211,7 @@ def sync_from_hcomm(args: argparse.Namespace) -> int:
         *PATCHED_HCOMM_FILES,
     ]
     patch = subprocess.run(diff_cmd, check=True, capture_output=True).stdout
-    (REPO_ROOT / "hcomm_overlay" / "modified_files.patch").write_bytes(patch)
+    (REPO_ROOT / "patches" / "modified_files.patch").write_bytes(patch)
 
     sync_llt_api(hcomm)
     sync_examples(hcomm)
@@ -224,7 +226,7 @@ def sync_from_hcomm(args: argparse.Namespace) -> int:
         ]
     )
     (REPO_ROOT / "metadata.txt").write_text(metadata, encoding="utf-8")
-    (REPO_ROOT / "hcomm_overlay" / "metadata.txt").write_text(metadata, encoding="utf-8")
+    (REPO_ROOT / "patches" / "metadata.txt").write_text(metadata, encoding="utf-8")
     print(f"synced_from={hcomm}")
     print(f"target_commit={target_commit}")
     return 0
@@ -297,9 +299,6 @@ def resolve_module_dir(args: argparse.Namespace) -> Path:
 def resolve_hcomm(args: argparse.Namespace, required: bool = False) -> Path:
     if getattr(args, "hcomm", None):
         return args.hcomm.resolve()
-    config = read_config()
-    if config.get("hcomm"):
-        return Path(str(config["hcomm"])).expanduser().resolve()
 
     if is_hcomm_repo(DEFAULT_HCOMM_DIR):
         return DEFAULT_HCOMM_DIR.resolve()
@@ -358,6 +357,38 @@ def resolve_build_dir(args: argparse.Namespace) -> str:
     if config.get("build_dir"):
         return str(config["build_dir"])
     return DEFAULT_BUILD_DIR
+
+
+def ensure_compatible_cmake_cache(hcomm: Path, build_dir: str) -> None:
+    build_path = hcomm / build_dir
+    cache_path = build_path / "CMakeCache.txt"
+    if not cache_path.exists():
+        return
+    expected_source = str(hcomm.resolve())
+    for line in cache_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if not line.startswith("CMAKE_HOME_DIRECTORY:INTERNAL="):
+            continue
+        cached_source = line.split("=", 1)[1]
+        if Path(cached_source).resolve() != Path(expected_source):
+            shutil.rmtree(build_path)
+        return
+
+
+def remove_stale_third_party_cmake_caches(hcomm: Path) -> None:
+    third_party = hcomm / "third_party"
+    if not third_party.exists():
+        return
+    for cache_path in third_party.glob("*-build/CMakeCache.txt"):
+        source = read_cmake_home_directory(cache_path)
+        if source and not source.exists():
+            shutil.rmtree(cache_path.parent)
+
+
+def read_cmake_home_directory(cache_path: Path) -> Path | None:
+    for line in cache_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if line.startswith("CMAKE_HOME_DIRECTORY:INTERNAL="):
+            return Path(line.split("=", 1)[1]).resolve()
+    return None
 
 
 def is_hcomm_repo(path: Path) -> bool:
@@ -425,7 +456,7 @@ def run_git_capture(repo: Path, *args: str) -> str:
 
 def sync_llt_api(hcomm: Path) -> None:
     src = hcomm / "test" / "st" / "algorithm" / "llt_api"
-    dst = REPO_ROOT / "llt_api"
+    dst = REPO_ROOT / "src" / "llt_api"
     if dst.exists():
         shutil.rmtree(dst)
     for rel in ("CMakeLists.txt", "include", "src"):

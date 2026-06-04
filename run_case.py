@@ -11,7 +11,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from hcomm_mock_synth.cli import main
+from hcomm_mock.cli import main
 
 
 if __name__ == "__main__":
