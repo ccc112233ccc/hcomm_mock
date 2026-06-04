@@ -101,4 +101,5 @@ dot -Tsvg out/allreduce_test_offload_a3/graph.dot \
 
 ## 更多说明
 
-- JSON 配置、AIV 行为、overlay 同步和维护流程见 [docs/development.md](docs/development.md)。
+- JSON 输入字段、支持的算子类型、数据类型、设备类型和拓扑配置见 [docs/configuration.md](docs/configuration.md)。
+- AIV 行为、overlay 同步和维护流程见 [docs/development.md](docs/development.md)。
